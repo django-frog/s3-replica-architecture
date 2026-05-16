@@ -22,4 +22,3 @@ app.include_router(router)
 @app.get("/health", tags=["System"])
 def health_check():
     return {"status": "healthy"}
-

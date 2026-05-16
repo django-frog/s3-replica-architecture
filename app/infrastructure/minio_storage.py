@@ -16,7 +16,7 @@ class MinioStorageEngine(IStorageEngine):
             config=Config(signature_version='s3v4'),
             region_name='us-east-1'
         )
-        
+
         # 2. Public Signer Client: STRICTLY for doing the math to generate browser URLs
         self.public_s3_client = boto3.client(
             's3',
@@ -26,7 +26,7 @@ class MinioStorageEngine(IStorageEngine):
             config=Config(signature_version='s3v4'),
             region_name='us-east-1'
         )
-        
+
         self.bucket = settings.MINIO_BUCKET_NAME
         self._ensure_bucket_exists()
 
@@ -65,5 +65,3 @@ class MinioStorageEngine(IStorageEngine):
             return response.get('Metadata', {})
         except ClientError:
             return {}
-
-

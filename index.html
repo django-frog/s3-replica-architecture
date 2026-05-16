@@ -13,26 +13,42 @@
         select, input[type="file"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
         button { background-color: #3498db; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
         button:hover { background-color: #2980b9; }
+
+        /* Updated Result Section Styles */
         #result-section { display: none; border-top: 2px solid #eee; padding-top: 20px; margin-top: 20px; }
         .meta-box { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; font-family: monospace; white-space: pre-wrap; margin-bottom: 15px;}
         .download-btn { background-color: #2ecc71; text-align: center; display: block; text-decoration: none; }
         .download-btn:hover { background-color: #27ae60; }
+
+        /* New RBAC Error Style */
+        .error-box { background-color: #fde8e8; color: #9b1c1c; padding: 15px; border-radius: 5px; border-left: 5px solid #e74c3c; margin-bottom: 15px; display: none; font-weight: bold; }
+        .success-box { display: none; }
     </style>
 </head>
 <body>
 
     <div class="card">
         <h1>🔐 Secure Document Vault</h1>
-        <p>Upload a file to MinIO. The backend will assign metadata and return a 60-second secure download link.</p>
+        <p>Upload a file and simulate an authenticated user requesting access.</p>
 
         <form id="uploadForm">
+            <!-- NEW: Simulated Login -->
+            <div class="form-group" style="background: #e8f4fd; padding: 15px; border-radius: 5px; border: 1px solid #b6d4fe;">
+                <label for="activeUser">👤 Active User Session:</label>
+                <select id="activeUser">
+                    <option value="alice">Alice (Clearance: Public Only)</option>
+                    <option value="bob">Bob (Clearance: Internal & Public)</option>
+                    <option value="charlie">Charlie (Clearance: Restricted, Internal, Public)</option>
+                </select>
+            </div>
+
             <div class="form-group">
                 <label for="fileInput">Select File to Vault:</label>
                 <input type="file" id="fileInput" required>
             </div>
 
             <div class="form-group">
-                <label for="classification">Data Classification:</label>
+                <label for="classification">Target Data Classification:</label>
                 <select id="classification">
                     <option value="public">Public (General Info)</option>
                     <option value="internal">Internal (Company Only)</option>
@@ -47,14 +63,23 @@
         <div id="result-section">
             <h3>✅ Upload Successful</h3>
             <p><strong>Object Key in MinIO:</strong> <span id="display-key"></span></p>
-            
+
             <label>Object Metadata (from S3):</label>
             <div class="meta-box" id="display-meta">Loading metadata...</div>
 
-            <p style="color: #e74c3c; font-size: 14px;"><strong>Note:</strong> The link below is a Pre-Signed URL. It will self-destruct in 60 seconds.</p>
-            <a href="#" id="downloadLink" class="download-btn" target="_blank" style="color: white; padding: 12px 20px; border-radius: 5px; font-weight: bold;">
-                🔗 Access Secure File
-            </a>
+            <!-- RBAC Access Evaluation Container -->
+            <div id="auth-evaluation">
+                <!-- Displays on 403 -->
+                <div id="errorBox" class="error-box"></div>
+
+                <!-- Displays on 200 OK -->
+                <div id="successBox" class="success-box">
+                    <p style="color: #e74c3c; font-size: 14px;"><strong>Note:</strong> The link below is a Pre-Signed URL. It will self-destruct in 60 seconds.</p>
+                    <a href="#" id="downloadLink" class="download-btn" target="_blank" style="color: white; padding: 12px 20px; border-radius: 5px; font-weight: bold;">
+                        🔗 Access Secure File
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -63,10 +88,16 @@
 
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const fileInput = document.getElementById('fileInput');
             const classification = document.getElementById('classification').value;
+            const activeUser = document.getElementById('activeUser').value;
             const uploadBtn = document.getElementById('uploadBtn');
+
+            // Reset UI states
+            document.getElementById('errorBox').style.display = 'none';
+            document.getElementById('successBox').style.display = 'none';
+            document.getElementById('result-section').style.display = 'none';
 
             if (fileInput.files.length === 0) return;
 
@@ -86,23 +117,36 @@
                 const uploadData = await uploadRes.json();
                 const objectKey = uploadData.object_key;
 
-                // 2. Fetch the Pre-signed Download Link
-                const linkRes = await fetch(`${API_BASE}/download-link?object_key=${encodeURIComponent(objectKey)}`);
-                const linkData = await linkRes.json();
-
-                // 3. Fetch the attached Metadata
+                // 2. Fetch the attached Metadata
                 const metaRes = await fetch(`${API_BASE}/metadata?object_key=${encodeURIComponent(objectKey)}`);
                 const metaData = await metaRes.json();
 
-                // Update the UI
+                // Update basic UI before link evaluation
                 document.getElementById('display-key').innerText = objectKey;
                 document.getElementById('display-meta').innerText = JSON.stringify(metaData.metadata, null, 2);
-                document.getElementById('downloadLink').href = linkData.download_url;
-                
                 document.getElementById('result-section').style.display = "block";
-                
+
+                // 3. Fetch the Pre-signed Download Link (Passing the X-User Header)
+                const linkRes = await fetch(`${API_BASE}/download-link?object_key=${encodeURIComponent(objectKey)}`, {
+                    headers: { "X-User": activeUser }
+                });
+                const linkData = await linkRes.json();
+
+                // 4. Evaluate RBAC Response
+                if (linkRes.status === 403) {
+                    // Access Denied by Use Case
+                    document.getElementById('errorBox').innerText = "❌ " + linkData.detail;
+                    document.getElementById('errorBox').style.display = "block";
+                } else if (linkRes.ok) {
+                    // Access Granted
+                    document.getElementById('downloadLink').href = linkData.download_url;
+                    document.getElementById('successBox').style.display = "block";
+                } else {
+                    throw new Error(linkData.detail || "Unknown API error");
+                }
+
             } catch (error) {
-                alert("Error communicating with API. Is Docker running?");
+                alert("Error communicating with API. Check console logs.");
                 console.error(error);
             } finally {
                 uploadBtn.innerText = "Upload to S3 / MinIO";
@@ -112,4 +156,3 @@
     </script>
 </body>
 </html>
-

@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict
 
 class IStorageEngine(ABC):
-    
+
     @abstractmethod
     def upload_file(self, file_bytes: bytes, object_key: str, metadata: Dict[str, str]) -> bool:
         """Upload byte stream to the target storage location with system metadata tags."""
@@ -17,5 +17,3 @@ class IStorageEngine(ABC):
     def fetch_metadata(self, object_key: str) -> Dict[str, str]:
         """Retrieve the immutable user-defined metadata dict attached to an object."""
         pass
-
-
