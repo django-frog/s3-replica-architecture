@@ -1,0 +1,49 @@
+
+networks:
+  cloud-net:
+    driver: bridge
+
+services:
+  # Object Storage Engine
+  minio:
+    image: minio/minio:latest
+    container_name: local-s3-engine
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000" # API point
+      - "9001:9001" # Web Dashboard
+    environment:
+      MINIO_ROOT_USER: root_admin
+      MINIO_ROOT_PASSWORD: secure_password_123
+    command: server /data --console-address ":9001"
+    networks:
+      - cloud-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Web Application
+  api-service:
+    build: .
+    container_name: vault_api
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=development
+      - MINIO_ENDPOINT=local-s3-engine:9000 # Inter-container communication using service name
+      - MINIO_ACCESS_KEY=root_admin
+      - MINIO_SECRET_KEY=secure_password_123
+      - MINIO_BUCKET_NAME=secure-vault
+      - URL_EXPIRATION=60
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - cloud-net
+
+volumes:
+  minio_data:
+
