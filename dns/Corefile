@@ -1,0 +1,10 @@
+vault.local {
+    file /etc/coredns/vault.local.db
+    log
+    errors
+}
+. {
+    forward . 127.0.0.11
+    log
+    errors
+}

@@ -1,0 +1,7 @@
+$ORIGIN vault.local.
+@   3600 IN SOA ns.vault.local. admin.vault.local. (
+                2026051701 7200 3600 1209600 3600 )
+@   3600 IN NS ns.vault.local.
+@   3600 IN A  10.5.0.10
+ns  3600 IN A  10.5.0.53
+
