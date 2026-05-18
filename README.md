@@ -41,7 +41,9 @@ Add the following line to the bottom:
 `127.0.0.1    vault.local`
 
 ### 2. Clone and Configure
+
 `git clone https://github.com/django-frog/s3-replica-architecture.git`
+
 `cd s3-replica-architecture`
 
 Ensure your `.env` file matches the unified endpoint:
