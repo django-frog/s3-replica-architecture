@@ -4,4 +4,4 @@ $ORIGIN vault.local.
 @   3600 IN NS ns.vault.local.
 @   3600 IN A  10.5.0.10
 ns  3600 IN A  10.5.0.53
-
+idp 3600 IN A  10.5.0.40

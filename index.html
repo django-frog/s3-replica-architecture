@@ -10,38 +10,49 @@
         h1 { margin-top: 0; color: #2c3e50; }
         .form-group { margin-bottom: 20px; }
         label { display: block; font-weight: bold; margin-bottom: 8px; }
-        select, input[type="file"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
-        button { background-color: #3498db; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
+        select, input[type="file"], input[type="text"], input[type="password"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button { background-color: #3498db; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
         button:hover { background-color: #2980b9; }
 
-        /* Updated Result Section Styles */
+        /* Login vs Vault States */
+        #vault-section { display: none; }
+        .auth-badge { background: #2ecc71; color: white; padding: 5px 10px; border-radius: 15px; font-size: 14px; display: inline-block; margin-bottom: 20px; }
+
         #result-section { display: none; border-top: 2px solid #eee; padding-top: 20px; margin-top: 20px; }
-        .meta-box { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; font-family: monospace; white-space: pre-wrap; margin-bottom: 15px;}
+        .meta-box { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; font-family: monospace; white-space: pre-wrap; margin-bottom: 15px; word-wrap: break-word;}
         .download-btn { background-color: #2ecc71; text-align: center; display: block; text-decoration: none; }
         .download-btn:hover { background-color: #27ae60; }
 
-        /* New RBAC Error Style */
         .error-box { background-color: #fde8e8; color: #9b1c1c; padding: 15px; border-radius: 5px; border-left: 5px solid #e74c3c; margin-bottom: 15px; display: none; font-weight: bold; }
         .success-box { display: none; }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h1>🔐 Secure Document Vault</h1>
-        <p>Upload a file and simulate an authenticated user requesting access.</p>
+    <div class="card" id="login-section">
+        <h1>🔐 Identity Verification</h1>
+        <p>Authenticate with Keycloak to access the Secure Vault.</p>
+        <div id="loginError" class="error-box"></div>
+        <form id="loginForm">
+            <div class="form-group">
+                <label>Username:</label>
+                <input type="text" id="username" required placeholder="e.g., alice">
+            </div>
+            <div class="form-group">
+                <label>Password:</label>
+                <input type="password" id="password" required placeholder="e.g., password123">
+            </div>
+            <button type="submit" id="loginBtn">Authenticate</button>
+        </form>
+    </div>
+
+    <div class="card" id="vault-section">
+        <h1>📁 Secure Document Vault</h1>
+        <div id="userBadge" class="auth-badge"></div>
+        <button onclick="logout()" style="background-color: #e74c3c; width: auto; float: right; padding: 5px 15px;">Logout</button>
+        <div style="clear: both; margin-bottom: 20px;"></div>
 
         <form id="uploadForm">
-            <!-- NEW: Simulated Login -->
-            <div class="form-group" style="background: #e8f4fd; padding: 15px; border-radius: 5px; border: 1px solid #b6d4fe;">
-                <label for="activeUser">👤 Active User Session:</label>
-                <select id="activeUser">
-                    <option value="alice">Alice (Clearance: Public Only)</option>
-                    <option value="bob">Bob (Clearance: Internal & Public)</option>
-                    <option value="charlie">Charlie (Clearance: Restricted, Internal, Public)</option>
-                </select>
-            </div>
-
             <div class="form-group">
                 <label for="fileInput">Select File to Vault:</label>
                 <input type="file" id="fileInput" required>
@@ -56,10 +67,9 @@
                 </select>
             </div>
 
-            <button type="submit" id="uploadBtn">Upload to S3 / MinIO</button>
+            <button type="submit" id="uploadBtn">Encrypt & Upload to S3</button>
         </form>
 
-        <!-- Hidden section that appears after successful upload -->
         <div id="result-section">
             <h3>✅ Upload Successful</h3>
             <p><strong>Object Key in MinIO:</strong> <span id="display-key"></span></p>
@@ -67,12 +77,8 @@
             <label>Object Metadata (from S3):</label>
             <div class="meta-box" id="display-meta">Loading metadata...</div>
 
-            <!-- RBAC Access Evaluation Container -->
             <div id="auth-evaluation">
-                <!-- Displays on 403 -->
                 <div id="errorBox" class="error-box"></div>
-
-                <!-- Displays on 200 OK -->
                 <div id="successBox" class="success-box">
                     <p style="color: #e74c3c; font-size: 14px;"><strong>Note:</strong> The link below is a Pre-Signed URL. It will self-destruct in 60 seconds.</p>
                     <a href="#" id="downloadLink" class="download-btn" target="_blank" style="color: white; padding: 12px 20px; border-radius: 5px; font-weight: bold;">
@@ -85,21 +91,69 @@
 
     <script>
         const API_BASE = "http://localhost:8000/v1/documents";
+        const KEYCLOAK_TOKEN_URL = "http://localhost:8080/realms/secure-vault-realm/protocol/openid-connect/token";
 
+        let activeToken = null;
+
+        // --- 1. Keycloak Authentication Logic ---
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('loginBtn');
+            btn.innerText = "Verifying...";
+            document.getElementById('loginError').style.display = 'none';
+
+            const params = new URLSearchParams();
+            params.append('username', document.getElementById('username').value);
+            params.append('password', document.getElementById('password').value);
+            params.append('client_id', 'vault-client');
+            params.append('grant_type', 'password');
+
+            try {
+                const res = await fetch(KEYCLOAK_TOKEN_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: params
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error("Invalid username or password");
+
+                activeToken = data.access_token;
+
+                // Decode JWT to show the user their clearance level visually
+                const payload = JSON.parse(atob(activeToken.split('.')[1]));
+                const roles = payload.realm_access?.roles.filter(r => !['offline_access', 'uma_authorization', 'default-roles-secure-vault-realm'].includes(r)).join(', ') || 'None';
+
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('vault-section').style.display = 'block';
+                document.getElementById('userBadge').innerText = `Logged in as: ${payload.preferred_username} | Clearance: [${roles}]`;
+
+            } catch (error) {
+                document.getElementById('loginError').innerText = "❌ " + error.message;
+                document.getElementById('loginError').style.display = 'block';
+            } finally {
+                btn.innerText = "Authenticate";
+            }
+        });
+
+        function logout() {
+            activeToken = null;
+            document.getElementById('loginForm').reset();
+            document.getElementById('vault-section').style.display = 'none';
+            document.getElementById('login-section').style.display = 'block';
+            document.getElementById('result-section').style.display = 'none';
+        }
+
+        // --- 2. Vault Upload Logic (Now using JWT) ---
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-
             const fileInput = document.getElementById('fileInput');
             const classification = document.getElementById('classification').value;
-            const activeUser = document.getElementById('activeUser').value;
             const uploadBtn = document.getElementById('uploadBtn');
 
-            // Reset UI states
             document.getElementById('errorBox').style.display = 'none';
             document.getElementById('successBox').style.display = 'none';
             document.getElementById('result-section').style.display = 'none';
-
-            if (fileInput.files.length === 0) return;
 
             uploadBtn.innerText = "Encrypting & Uploading...";
             uploadBtn.disabled = true;
@@ -108,37 +162,39 @@
             formData.append("file", fileInput.files[0]);
             formData.append("classification", classification);
 
+            // The critical change: Injecting the Keycloak JWT into the header
+            const authHeader = { "Authorization": `Bearer ${activeToken}` };
+
             try {
-                // 1. Upload the File
+                // Upload (Protected by JWT)
                 const uploadRes = await fetch(`${API_BASE}/upload`, {
                     method: 'POST',
+                    headers: authHeader,
                     body: formData
                 });
                 const uploadData = await uploadRes.json();
+
+                if (!uploadRes.ok) throw new Error(uploadData.detail || "Upload rejected by server");
                 const objectKey = uploadData.object_key;
 
-                // 2. Fetch the attached Metadata
-                const metaRes = await fetch(`${API_BASE}/metadata?object_key=${encodeURIComponent(objectKey)}`);
+                // Fetch Metadata
+                const metaRes = await fetch(`${API_BASE}/metadata?object_key=${encodeURIComponent(objectKey)}`, { headers: authHeader });
                 const metaData = await metaRes.json();
 
-                // Update basic UI before link evaluation
                 document.getElementById('display-key').innerText = objectKey;
                 document.getElementById('display-meta').innerText = JSON.stringify(metaData.metadata, null, 2);
                 document.getElementById('result-section').style.display = "block";
 
-                // 3. Fetch the Pre-signed Download Link (Passing the X-User Header)
+                // Fetch Secure Link (Protected by JWT)
                 const linkRes = await fetch(`${API_BASE}/download-link?object_key=${encodeURIComponent(objectKey)}`, {
-                    headers: { "X-User": activeUser }
+                    headers: authHeader
                 });
                 const linkData = await linkRes.json();
 
-                // 4. Evaluate RBAC Response
                 if (linkRes.status === 403) {
-                    // Access Denied by Use Case
                     document.getElementById('errorBox').innerText = "❌ " + linkData.detail;
                     document.getElementById('errorBox').style.display = "block";
                 } else if (linkRes.ok) {
-                    // Access Granted
                     document.getElementById('downloadLink').href = linkData.download_url;
                     document.getElementById('successBox').style.display = "block";
                 } else {
@@ -146,10 +202,11 @@
                 }
 
             } catch (error) {
-                alert("Error communicating with API. Check console logs.");
-                console.error(error);
+                document.getElementById('errorBox').innerText = "❌ " + error.message;
+                document.getElementById('errorBox').style.display = "block";
+                document.getElementById('result-section').style.display = "block";
             } finally {
-                uploadBtn.innerText = "Upload to S3 / MinIO";
+                uploadBtn.innerText = "Encrypt & Upload to S3";
                 uploadBtn.disabled = false;
             }
         });

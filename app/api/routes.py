@@ -1,8 +1,9 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, Header, status
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status
 from app.infrastructure.minio_storage import MinioStorageEngine
 from app.use_cases.document_vault import DocumentVaultUseCase
-from app.domain.models import USERS_DB, User
 from app.core.config import settings
+from app.core.security import get_current_user
+from typing import Dict, Any
 
 router = APIRouter(prefix="/v1/documents", tags=["Vault Engine"])
 
@@ -11,22 +12,19 @@ def get_vault_use_case() -> DocumentVaultUseCase:
     storage = MinioStorageEngine()
     return DocumentVaultUseCase(storage)
 
-# Identity Resolver Dependency: Intercepts user context via HTTP Headers
-def get_current_user(x_user: str = Header(default="alice")) -> User:
-    user = USERS_DB.get(x_user.lower())
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session rejection: Unknown user identity context."
-        )
-    return user
-
 @router.post("/upload", status_code=status.HTTP_201_CREATED)
 async def upload_document(
     file: UploadFile = File(...),
     classification: str = Form("internal"),
+    current_user: Dict[str, Any] = Depends(get_current_user), # Secure upload route
     use_case: DocumentVaultUseCase = Depends(get_vault_use_case)
 ):
+    if classification != "public" and classification not in current_user["roles"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"You lack clearance to upload {classification} files."
+        )
+
     file_bytes = await file.read()
     try:
         return use_case.store_document(file_bytes, file.filename, classification)
@@ -36,7 +34,7 @@ async def upload_document(
 @router.get("/download-link")
 def get_download_link(
     object_key: str,
-    current_user: User = Depends(get_current_user), # Injected user session context
+    current_user: Dict[str, Any] = Depends(get_current_user), # Injects the JWT payload
     use_case: DocumentVaultUseCase = Depends(get_vault_use_case)
 ):
     try:

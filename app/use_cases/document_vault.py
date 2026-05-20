@@ -1,6 +1,5 @@
 from typing import Dict, Any
 from app.interfaces.storage import IStorageEngine
-from app.domain.models import User, CLEARANCE_WEIGHTS
 
 class DocumentVaultUseCase:
     def __init__(self, storage_engine: IStorageEngine):
@@ -21,19 +20,15 @@ class DocumentVaultUseCase:
 
         return {"object_key": object_key, "status": "persisted"}
 
-    def get_secure_link(self, object_key: str, current_user: User, expires_in: int) -> str:
-        # 1. Retrieve the immutable metadata dictionary directly from the storage object
+    def get_secure_link(self, object_key: str, current_user: dict, expires_in: int) -> str:
         metadata = self.storage_engine.fetch_metadata(object_key)
         file_classification = metadata.get("classification", "public")
 
-        # 2. Evaluate cross-tier privileges mathematically
-        user_clearance_weight = CLEARANCE_WEIGHTS.get(current_user.clearance_level, 0)
-        required_file_weight = CLEARANCE_WEIGHTS.get(file_classification, 0)
-
-        if user_clearance_weight < required_file_weight:
+        # Evaluate RBAC based on Keycloak token roles
+        if file_classification != "public" and file_classification not in current_user["roles"]:
             raise PermissionError(
-                f"Access Denied: User '{current_user.username}' with clearance '{current_user.clearance_level}' "
-                f"is unauthorized to view '{file_classification}' documents."
+                f"Access Denied: User '{current_user['username']}' lacks the '{file_classification}' role "
+                f"required to view this document."
             )
 
         # 3. Authorization verified -> generate secure link

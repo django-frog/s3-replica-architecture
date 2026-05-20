@@ -7,6 +7,20 @@ networks:
         - subnet: 10.5.0.0/16
 
 services:
+  # --- Identity Provider (AuthN & RBAC) ---
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.1
+    container_name: vault_idp
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin                # Changed this
+      KEYCLOAK_ADMIN_PASSWORD: super_secure_admin # Changed this
+    ports:
+      - "8080:8080"
+    networks:
+      cloud-vpc:
+        ipv4_address: 10.5.0.40
+
   # 1. Cloud DNS (Route 53)
   internal-dns:
     image: coredns/coredns:latest
@@ -35,7 +49,7 @@ services:
       cloud-vpc:
         ipv4_address: 10.5.0.10
 
-  # FastAPI Web Application
+  # 3. FastAPI Web Application
   api-service:
     build: .
     container_name: vault_api
@@ -48,6 +62,7 @@ services:
     depends_on:
       - internal-dns
       - minio
+      - keycloak   # Tells Docker to boot Keycloak before the API
     networks:
       cloud-vpc:
         ipv4_address: 10.5.0.20
