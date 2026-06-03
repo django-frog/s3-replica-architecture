@@ -1,3 +1,4 @@
+import asyncio
 from typing import Dict
 import boto3
 from botocore.client import Config
@@ -28,10 +29,11 @@ class MinioStorageEngine(IStorageEngine):
             if e.response['Error']['Code'] == '404':
                 self.s3_client.create_bucket(Bucket=self.bucket)
 
-    def upload_file(self, file_bytes: bytes, object_key: str, metadata: Dict[str, str]) -> bool:
+    async def upload_file(self, file_bytes: bytes, object_key: str, metadata: Dict[str, str]) -> bool:
         try:
             s3_metadata = {k: str(v) for k, v in metadata.items()}
-            self.s3_client.put_object(
+            await asyncio.to_thread(
+                self.s3_client.put_object,
                 Bucket=self.bucket,
                 Key=object_key,
                 Body=file_bytes,
@@ -56,3 +58,19 @@ class MinioStorageEngine(IStorageEngine):
             return response.get('Metadata', {})
         except ClientError:
             return {}
+
+    async def list_files(self, prefix: str) -> list[str]:
+        def _list():
+            try:
+                response = self.s3_client.list_objects_v2(
+                    Bucket=self.bucket,
+                    Prefix=prefix
+                )
+                if 'Contents' in response:
+                    return [item['Key'] for item in response['Contents']]
+                return []
+            except ClientError as e:
+                print(f"Failed to list objects: {e}")
+                return []
+
+        return await asyncio.to_thread(_list)

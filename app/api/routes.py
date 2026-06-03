@@ -27,7 +27,7 @@ async def upload_document(
 
     file_bytes = await file.read()
     try:
-        return use_case.store_document(file_bytes, file.filename, classification)
+        return await use_case.store_document(file_bytes, file.filename, classification)
     except RuntimeError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -52,3 +52,14 @@ def get_metadata(
     if not meta:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset metadata not found.")
     return {"metadata": meta}
+
+@router.get("/list")
+async def list_documents(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    use_case: DocumentVaultUseCase = Depends(get_vault_use_case)
+):
+    try:
+        keys = await use_case.list_accessible_documents(current_user)
+        return {"files": keys}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

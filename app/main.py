@@ -1,16 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
+from app.core.config import settings
 
 app = FastAPI(
     title="Cloud-Native Object Storage Microservice",
     version="1.0.0"
 )
 
-# --- ADD THIS CORS BLOCK ---
+# --- UPDATED CORS BLOCK ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows any local frontend to connect during development
+    allow_origins=settings.BACKEND_CORS_ORIGINS, # Dynamically loaded
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

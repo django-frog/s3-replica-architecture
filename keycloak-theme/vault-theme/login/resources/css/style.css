@@ -1,0 +1,38 @@
+/* Match the React body background */
+body, .login-pf body {
+    background-color: #f4f4f9 !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
+/* Match the React 'card' class */
+.login-pf-page .card-pf {
+    background: white !important;
+    padding: 30px !important;
+    border-radius: 10px !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+    border-top: none !important;
+    max-width: 500px !important;
+    margin: 40px auto !important;
+}
+
+/* Match your <h2> Header styling */
+#kc-header-wrapper {
+    color: #2c3e50 !important;
+    font-weight: bold !important;
+    font-size: 24px !important;
+    text-transform: none !important;
+}
+
+/* Match the primary blue button */
+.btn-primary {
+    background-color: #3498db !important;
+    border-color: #3498db !important;
+    padding: 12px 20px !important;
+    border-radius: 5px !important;
+    font-weight: bold !important;
+    font-size: 16px !important;
+}
+
+.btn-primary:hover {
+    background-color: #2980b9 !important;
+}
