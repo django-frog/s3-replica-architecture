@@ -2,9 +2,7 @@
 networks:
   cloud-vpc:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 10.5.0.0/16
+
 
 services:
   # --- Identity Provider (AuthN & RBAC) ---
@@ -16,26 +14,20 @@ services:
       # Interpolated from .env!
       KEYCLOAK_ADMIN: ${INFRA_KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${INFRA_KEYCLOAK_PASSWORD}
+      # Restrict Keycloak's JVM memory footprint to prevent crashing on the free tier
+      JAVA_OPTS_APPEND: "-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8080:8080"
     volumes:
       - ./keycloak-theme/vault-theme:/opt/keycloak/themes/vault-theme
     networks:
-      cloud-vpc:
-        ipv4_address: 10.5.0.40
+      - cloud-vpc
+    deploy:
+      resources:
+        limits:
+          memory: 384M
 
-  # 1. Cloud DNS (Route 53)
-  internal-dns:
-    image: coredns/coredns:latest
-    container_name: vault_dns
-    command: -conf /etc/coredns/Corefile
-    volumes:
-      - ./dns:/etc/coredns
-    networks:
-      cloud-vpc:
-        ipv4_address: 10.5.0.53
-
-  # 2. Object Storage (S3)
+  # --- Object Storage (S3) ---
   minio:
     image: minio/minio:latest
     container_name: local-s3-engine
@@ -50,28 +42,31 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
     command: server /data --console-address ":9001"
     networks:
-      cloud-vpc:
-        ipv4_address: 10.5.0.10
+      - cloud-vpc
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
-  # 3. FastAPI Web Application
+  # --- FastAPI Web Application ---
   api-service:
     build: .
     container_name: vault_api
     ports:
       - "8000:8000"
-    dns:
-      - 10.5.0.53  # Forces the API to ask CoreDNS for directions!
     env_file:
-      - .env       # Loads the unified vault.local endpoint
+      - .env
     depends_on:
-      - internal-dns
       - minio
       - keycloak
     networks:
-      cloud-vpc:
+      - cloud-vpc
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
-
-# 4. Frontend Application
+  # --- Frontend Application ---
   webapp:
     build: ./frontend
     container_name: vault_ui
@@ -80,8 +75,11 @@ services:
     depends_on:
       - api-service
     networks:
-      cloud-vpc:
-        ipv4_address: 10.5.0.20
+      - cloud-vpc
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
 volumes:
   minio_data:

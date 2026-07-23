@@ -1,11 +1,11 @@
-from pydantic_settings import BaseSettings
+from typing import Union
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     # App Settings
     APP_ENV: str = "development"
-
-    # pydantic-settings automatically parses the JSON array from the .env!
-    BACKEND_CORS_ORIGINS: list[str] = []
 
     # Infrastructure (MinIO / S3) Settings
     MINIO_ENDPOINT: str
@@ -20,12 +20,33 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_ID: str = "vault-client"
     KEYCLOAK_FRONTEND_URL: str = "http://localhost:8080"
 
+    # CORS Settings
+    BACKEND_CORS_ORIGINS: list[str] = []
+
+    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Union[str, list[str]]) -> list[str]:
+        """
+        Parses comma-separated strings or JSON arrays into a list of origins.
+        Prevents validation errors if .env contains:
+        BACKEND_CORS_ORIGINS="http://localhost:3000,http://localhost:8080"
+        """
+        if isinstance(v, str) and not v.startswith("["):
+            return [i.strip() for i in v.split(",") if i.strip()]
+        if isinstance(v, (list, str)):
+            return v
+        raise ValueError(f"Invalid CORS origins value: {v}")
+
     @property
     def keycloak_issuer(self) -> str:
         return f"{self.KEYCLOAK_FRONTEND_URL}/realms/{self.KEYCLOAK_REALM}"
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    # Pydantic v2 modern configuration settings
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
 
 settings = Settings()
