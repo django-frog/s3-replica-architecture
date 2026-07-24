@@ -26,8 +26,13 @@ async def upload_document(
         )
 
     file_bytes = await file.read()
+
+    # Extract the username from the validated Keycloak token
+    publisher_name = current_user.get("username", "unknown")
+
     try:
-        return await use_case.store_document(file_bytes, file.filename, classification)
+        # Pass the publisher_name down to the Use Case
+        return await use_case.store_document(file_bytes, file.filename, classification, publisher_name)
     except RuntimeError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 

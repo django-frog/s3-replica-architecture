@@ -5,13 +5,15 @@ class DocumentVaultUseCase:
     def __init__(self, storage_engine: IStorageEngine):
         self.storage_engine = storage_engine
 
-    async def store_document(self, file_bytes: bytes, filename: str, classification: str) -> Dict[str, Any]:
+    async def store_document(self, file_bytes: bytes, filename: str, classification: str, publisher: str) -> Dict[str, Any]:
         # Standardize object naming paths mimicking AWS folder prefixes
         object_key = f"documents/{classification}/{filename}"
 
+        # Inject the publisher into the S3 object metadata
         metadata = {
             "classification": classification,
-            "file_name": filename
+            "file_name": filename,
+            "publisher": publisher
         }
 
         success = await self.storage_engine.upload_file(file_bytes, object_key, metadata)
