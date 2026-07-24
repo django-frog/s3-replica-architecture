@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_ID: str = "vault-client"
     KEYCLOAK_FRONTEND_URL: str = "http://localhost:8080"
 
+    INFRA_KEYCLOAK_ADMIN: str = "admin"
+    INFRA_KEYCLOAK_PASSWORD: str = "super_secret_idp_password"
+
     # CORS Settings
     BACKEND_CORS_ORIGINS: list[str] = []
 

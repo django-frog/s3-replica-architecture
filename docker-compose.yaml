@@ -8,29 +8,34 @@ services:
   # --- Identity Provider (AuthN & RBAC) ---
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.1
-    container_name: vault_idp
-    command: start-dev
+    container_name: vault_idp_staging
+    command: start-dev --health-enabled=true --import-realm
     environment:
-      # Interpolated from .env!
       KEYCLOAK_ADMIN: ${INFRA_KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${INFRA_KEYCLOAK_PASSWORD}
-      # Restrict Keycloak's JVM memory footprint to prevent crashing on the free tier
       JAVA_OPTS_APPEND: "-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8080:8080"
     volumes:
       - ./keycloak-theme/vault-theme:/opt/keycloak/themes/vault-theme
+      - ./realm-export.json:/opt/keycloak/data/import/realm.json
     networks:
       - cloud-vpc
     deploy:
       resources:
         limits:
           memory: 384M
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   # --- Object Storage (S3) ---
   minio:
     image: minio/minio:latest
-    container_name: local-s3-engine
+    container_name: local-s3-engine-staging
     volumes:
       - minio_data:/data
     ports:
@@ -51,14 +56,16 @@ services:
   # --- FastAPI Web Application ---
   api-service:
     build: .
-    container_name: vault_api
+    container_name: vault_api_staging
     ports:
       - "8000:8000"
     env_file:
       - .env
     depends_on:
-      - minio
-      - keycloak
+      minio:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
     networks:
       - cloud-vpc
     deploy:
@@ -69,7 +76,7 @@ services:
   # --- Frontend Application ---
   webapp:
     build: ./frontend
-    container_name: vault_ui
+    container_name: vault_ui_staging
     ports:
       - "3000:3000"
     depends_on:

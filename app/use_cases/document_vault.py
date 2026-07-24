@@ -20,8 +20,8 @@ class DocumentVaultUseCase:
 
         return {"object_key": object_key, "status": "persisted"}
 
-    def get_secure_link(self, object_key: str, current_user: dict, expires_in: int) -> str:
-        metadata = self.storage_engine.fetch_metadata(object_key)
+    async def get_secure_link(self, object_key: str, current_user: dict, expires_in: int) -> str:
+        metadata = await self.storage_engine.fetch_metadata(object_key)
         file_classification = metadata.get("classification", "public")
 
         # Evaluate RBAC based on Keycloak token roles
@@ -34,8 +34,8 @@ class DocumentVaultUseCase:
         # 3. Authorization verified -> generate secure link
         return self.storage_engine.generate_download_url(object_key, expires_in)
 
-    def get_document_details(self, object_key: str) -> Dict[str, str]:
-        return self.storage_engine.fetch_metadata(object_key)
+    async def get_document_details(self, object_key: str) -> Dict[str, str]:
+        return await self.storage_engine.fetch_metadata(object_key)
 
 
     async def list_accessible_documents(self, current_user: dict) -> list[str]:

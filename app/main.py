@@ -1,25 +1,12 @@
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
 from app.core.config import settings
-from app.core.seeder import seed_sandbox
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    if settings.APP_ENV != "production":
-        await seed_sandbox()
-
-    yield  # Hand over control to FastAPI to start accepting HTTP requests
-
-    pass
-
 
 app = FastAPI(
     title="Cloud-Native Object Storage Microservice",
     version="1.0.0",
-    lifespan=lifespan  # Attach the context manager here
 )
 
 # Strip trailing slashes to prevent browser CORS preflight failures
@@ -32,7 +19,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# ---------------------------
 
 app.include_router(router)
 

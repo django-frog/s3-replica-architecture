@@ -32,23 +32,23 @@ async def upload_document(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.get("/download-link")
-def get_download_link(
+async def get_download_link(
     object_key: str,
     current_user: Dict[str, Any] = Depends(get_current_user), # Injects the JWT payload
     use_case: DocumentVaultUseCase = Depends(get_vault_use_case)
 ):
     try:
-        url = use_case.get_secure_link(object_key, current_user, settings.URL_EXPIRATION)
+        url = await use_case.get_secure_link(object_key, current_user, settings.URL_EXPIRATION)
         return {"download_url": url}
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 @router.get("/metadata")
-def get_metadata(
+async def get_metadata(
     object_key: str,
     use_case: DocumentVaultUseCase = Depends(get_vault_use_case)
 ):
-    meta = use_case.get_document_details(object_key)
+    meta = await use_case.get_document_details(object_key)
     if not meta:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset metadata not found.")
     return {"metadata": meta}

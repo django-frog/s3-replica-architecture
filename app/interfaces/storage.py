@@ -14,7 +14,7 @@ class IStorageEngine(ABC):
         pass
 
     @abstractmethod
-    def fetch_metadata(self, object_key: str) -> Dict[str, str]:
+    async def fetch_metadata(self, object_key: str) -> Dict[str, str]:
         """Retrieve the immutable user-defined metadata dict attached to an object."""
         pass
 
